@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURS Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #333333;
+            --primary: #007bff;
+            --success: #28a745;
+            --danger: #dc3545;
+            --border: #e0e0e0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        /* Connection Panel */
+        .config-panel {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            max-width: 400px;
+            margin: 0 auto 30px auto;
+            text-align: center;
+        }
+
+        .config-panel input {
+            padding: 10px;
+            width: 60%;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .config-panel button {
+            padding: 10px 20px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .config-panel button:hover {
+            background-color: #0056b3;
+        }
+
+        #connection-status {
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* Slots Grid */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .slot-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-top: 5px solid gray;
+        }
+
+        .slot-card.available { border-top-color: var(--success); }
+        .slot-card.rented { border-top-color: var(--danger); }
+
+        .slot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge.available { background-color: var(--success); }
+        .badge.rented { background-color: var(--danger); }
+
+        .renter-info {
+            margin-bottom: 20px;
+            font-size: 15px;
+        }
+
+        .renter-info span { font-weight: bold; }
+
+        /* History Table */
+        .history-section h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th { background-color: #f9f9f9; }
+
+        .action-rented { color: var(--danger); font-weight: bold; }
+        .action-returned { color: var(--success); font-weight: bold; }
+
+        /* HTTPS Warning */
+        #mixed-content-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 800px;
+            margin: 0 auto 20px auto;
+            border: 1px solid #ffeeba;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>AURS Dashboard</h1>
+    <div class="subtitle">Automated Umbrella Rental System</div>
+
+    <div id="mixed-content-warning">
+        <strong>⚠️ Security Warning:</strong> You are viewing this site via HTTPS (Vercel), but the Arduino uses HTTP. Your browser might block the connection. 
+        If the data won't load, you need to click the lock icon in your URL bar, go to Site Settings, and allow "Insecure Content".
+    </div>
+
+    <div class="config-panel">
+        <label for="ip-address">Arduino IP Address:</label><br><br>
+        <input type="text" id="ip-address" placeholder="192.168.1.x" value="192.168.1.5">
+        <button onclick="startFetching()">Connect</button>
+        <div id="connection-status" style="color: #666;">Waiting to connect...</div>
+    </div>
+
+    <div class="grid-container" id="slots-container">
+        </div>
+
+    <script>
+        let fetchInterval;
+
+        // Check if hosted on secure Vercel site (helps debug)
+        if (window.location.protocol === 'https:') {
+            document.getElementById('mixed-content-warning').style.display = 'block';
+        }
+
+        function startFetching() {
+            // Stop any existing loops
+            if (fetchInterval) clearInterval(fetchInterval);
+            
+            fetchData(); // Fetch immediately
+            fetchInterval = setInterval(fetchData, 3000); // Then fetch every 3 seconds
+        }
+
+        async function fetchData() {
+            const ip = document.getElementById('ip-address').value;
+            const statusText = document.getElementById('connection-status');
+            
+            if (!ip) {
+                statusText.innerText = "Please enter an IP address!";
+                statusText.style.color = "red";
+                return;
+            }
+
+            statusText.innerText = "Connecting to " + ip + "...";
+            statusText.style.color = "orange";
+
+            try {
+                // Fetch the JSON from the Arduino
+                const response = await fetch(`http://${ip}/status`);
+                if (!response.ok) throw new Error("Network response was not ok");
+                
+                const data = await response.json();
+                
+                statusText.innerText = "Connected & Live!";
+                statusText.style.color = "green";
+
+                renderSlots(data);
+
+            } catch (error) {
+                statusText.innerText = "Connection Failed. Check IP or Wi-Fi.";
+                statusText.style.color = "red";
+                console.error("Fetch error:", error);
+            }
+        }
+
+        function renderSlots(data) {
+            const container = document.getElementById('slots-container');
+            container.innerHTML = ""; // Clear existing
+
+            data.forEach((slot, index) => {
+                const isAvail = slot.available;
+                const statusClass = isAvail ? "available" : "rented";
+                const statusText = isAvail ? "Available" : "Rented";
+
+                // Generate History Table Rows
+                let historyHTML = "";
+                if (slot.history && slot.history.length > 0) {
+                    slot.history.forEach(record => {
+                        const actionClass = record.action === "Rented" ? "action-rented" : "action-returned";
+                        historyHTML += `
+                            <tr>
+                                <td>${record.name}</td>
+                                <td>${record.action}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    historyHTML = "<tr><td colspan='2'>No recent history.</td></tr>";
+                }
+
+                // Create the Card HTML
+                const cardHTML = `
+                    <div class="slot-card ${statusClass}">
+                        <div class="slot-header">
+                            <h2>Slot ${index + 1}</h2>
+                            <span class="badge ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="renter-info">
+                            ${isAvail 
+                                ? "<em>Empty / Ready to rent</em>" 
+                                : `Rented by: <span>${slot.name}</span><br>LRN: <span>${slot.lrn}</span>`
+                            }
+                        </div>
+                        <div class="history-section">
+                            <h3>Recent Activity</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${historyHTML}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHTML;
+            });
+        }
+    </script>
+</body>
+</html>
